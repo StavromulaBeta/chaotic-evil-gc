@@ -52,7 +52,7 @@ static uintptr_t* heap_start;
 static uintptr_t* heap_top;
 
 static uint8_t* bitmap;
-static uint8_t* bitmap_search_start;
+static uint8_t* free_start;
 
 static void gc_collect_root(uintptr_t);
 
@@ -60,8 +60,8 @@ void __gc_init(void* sp)
 {
   gc_enabled = 1;
   stack_start = sp;
-  bitmap = bitmap_search_start = mmap(0, MAP_SIZE/32, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
-  heap_start = heap_top        = mmap(0, MAP_SIZE,    PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
+  free_start = bitmap   = mmap(0, MAP_SIZE/32, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
+  heap_start = heap_top = mmap(0, MAP_SIZE,    PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
   BITMAP_INDEX(heap_start) = BITMAP_FREE;
 }
 
@@ -69,21 +69,18 @@ void* gc_malloc(size_t bytes)
 {
   static int byte_count = 0;
   byte_count += bytes;
-  if (byte_count >= GC_INTERVAL) gc_collect(), byte_count = 0;
+  if (byte_count > 1024 * 1024) gc_collect(), byte_count = 0;
   const size_t longs = (bytes + 7) / sizeof(uintptr_t);
-  uint8_t* free_start
-    = bitmap_search_start
-    = memchr(bitmap_search_start, BITMAP_FREE, ULONG_MAX);
-  uint8_t* free_end;
-  while ((free_end = memchr(free_start, BITMAP_ALLOC, longs)))
-    free_start = memchr(free_end, BITMAP_FREE, ULONG_MAX);
-  free_end = free_start + longs;
+  for (uint8_t* restrict free_end; (free_end = memchr(free_start, BITMAP_ALLOC, longs)); )
+    free_start = memchr(free_end, BITMAP_FREE, LONG_MAX);
+  uint8_t* restrict free_end = free_start + longs;
+  uintptr_t* buf = heap_start + (free_start - bitmap);
   *free_end   = BITMAP_FREE;
   *free_start = BITMAP_ALLOC;
-  memset(free_start + 1, BITMAP_EMPTY, free_end - free_start - 1);
-  if (heap_top - heap_start < free_end - bitmap)
-    heap_top = heap_start + (free_end - bitmap);
-  return heap_start + (free_start - bitmap);
+  memset(free_start + 1, BITMAP_EMPTY, longs - 1);
+  if (heap_top < buf) heap_top = buf;
+  free_start = free_end;
+  return buf;
 }
 
 void* gc_realloc(void* src, size_t sz)
@@ -108,12 +105,12 @@ __attribute__((noinline)) void gc_collect()
   if (!gc_enabled) return;
   for (uintptr_t* p = (uintptr_t*)bitmap; (uint8_t*)p < bitmap + (heap_top - heap_start); ++p)
     *p &= 0x5555555555555555;
-  bitmap_search_start = bitmap;
   jmp_buf a;
   setjmp(a);
   uintptr_t* sp = (uintptr_t*)&sp;
   for (uintptr_t* root = sp + 1; root < stack_start; ++root)
     gc_collect_root(*root);
+  free_start = memchr(bitmap, BITMAP_FREE, LONG_MAX);
 }
 
 char* gc_strdup(char* src)
