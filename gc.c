@@ -71,8 +71,8 @@ void* gc_malloc(size_t bytes)
   byte_count += bytes;
   if (byte_count > 1024 * 1024) gc_collect(), byte_count = 0;
   const size_t longs = (bytes + 7) / sizeof(uintptr_t);
-  for (uint8_t* restrict free_end; (free_end = memchr(free_start, BITMAP_ALLOC, longs)); )
-    free_start = memchr(free_end, BITMAP_FREE, LONG_MAX);
+  for (uint8_t* restrict free_end; (free_end = memchr(free_start + 1, BITMAP_ALLOC, longs)); )
+    free_start = memchr(free_end + 1, BITMAP_FREE, LONG_MAX);
   uint8_t* restrict free_end = free_start + longs;
   uintptr_t* buf = heap_start + (free_start - bitmap);
   *free_end   = BITMAP_FREE;
