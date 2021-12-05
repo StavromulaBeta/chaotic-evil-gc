@@ -33,6 +33,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <limits.h>
+#include <assert.h>
 
 #define MAP_SIZE 0x10000000000
 
@@ -42,13 +43,15 @@
 #define BITMAP_FREE  0x1
 #define BITMAP_ALLOC 0x3
 
-#define BITMAP_INDEX(ptr) bitmap[ptr - heap_start]
+#define BITMAP_INDEX(ptr) bitmap[ptr - heap]
 
 int gc_enabled;
 
+static int gc_has_init = 0;
+
 static uintptr_t* stack_start;
 
-static uintptr_t* heap_start;
+static uintptr_t* heap;
 static uintptr_t* heap_top;
 
 static uint8_t* bitmap;
@@ -59,15 +62,19 @@ static void gc_collect_root(uintptr_t);
 void __gc_init(void* sp)
 {
   gc_enabled = 1;
+  gc_has_init = 1;
   stack_start = sp;
   free_start = bitmap   = mmap(0, MAP_SIZE/32, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
-  heap_start = heap_top = mmap(0, MAP_SIZE,    PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
-  BITMAP_INDEX(heap_start) = BITMAP_FREE;
+  heap = heap_top = mmap(0, MAP_SIZE,    PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
+  assert(heap != MAP_FAILED);
+  assert(bitmap != MAP_FAILED);
+  BITMAP_INDEX(heap) = BITMAP_FREE;
 }
 
 __attribute__((malloc, hot, assume_aligned(sizeof(uint64_t)), alloc_size(1), returns_nonnull))
 void* gc_malloc(size_t bytes)
 {
+  assert(gc_has_init);
   static int byte_count = 0;
   byte_count += bytes;
   if (byte_count > 1024 * 1024) gc_collect(), byte_count = 0;
@@ -77,7 +84,7 @@ void* gc_malloc(size_t bytes)
     free_start = memchr(free_end + 1, BITMAP_FREE, LONG_MAX);
   memset(free_start + 1, BITMAP_EMPTY, longs - 1);
   uint8_t* restrict free_end = free_start + longs;
-  uintptr_t* buf = heap_start + (free_start - bitmap);
+  uintptr_t* buf = heap + (free_start - bitmap);
   *free_start = BITMAP_ALLOC;
   if (heap_top < buf + longs) heap_top = buf + longs;
   if (*free_end != BITMAP_ALLOC) *free_end = BITMAP_FREE;
@@ -93,7 +100,7 @@ void* gc_realloc(void* src, size_t sz)
 static void gc_collect_root(uintptr_t object)
 {
   uintptr_t* ptr = (uintptr_t*)object;
-  if (ptr < heap_start || ptr >= heap_top
+  if (ptr < heap || ptr >= heap_top
    || BITMAP_INDEX(ptr) != BITMAP_FREE) return;
   BITMAP_INDEX(ptr) = BITMAP_ALLOC;
   for (uintptr_t i = 1; BITMAP_INDEX(ptr + i) == BITMAP_EMPTY; ++i)
@@ -104,7 +111,7 @@ static void gc_collect_root(uintptr_t object)
 __attribute__((noinline)) void gc_collect()
 {
   if (!gc_enabled) return;
-  for (uintptr_t* p = (uintptr_t*)bitmap; (uint8_t*)p < bitmap + (heap_top - heap_start); ++p)
+  for (uintptr_t* p = (uintptr_t*)bitmap; (uint8_t*)p < bitmap + (heap_top - heap); ++p)
     *p &= 0x5555555555555555;
   jmp_buf a;
   setjmp(a);
