@@ -64,9 +64,9 @@ void __gc_init(void* sp)
   gc_enabled = 1;
   gc_has_init = 1;
   stack_start = sp;
-  free_start = bitmap   = mmap(0, MAP_SIZE/32, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
-  heap = heap_top = mmap(0, MAP_SIZE,    PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
-  assert(heap != MAP_FAILED);
+  free_start = bitmap = mmap(0, MAP_SIZE/8, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
+  heap = heap_top     = mmap(0, MAP_SIZE,   PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
+  assert(heap   != MAP_FAILED);
   assert(bitmap != MAP_FAILED);
   BITMAP_INDEX(heap) = BITMAP_FREE;
 }
