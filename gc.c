@@ -100,8 +100,9 @@ void* gc_realloc(void* src, size_t sz)
 static void gc_collect_root(uintptr_t object)
 {
   uintptr_t* ptr = (uintptr_t*)object;
-  if (ptr < heap || ptr >= heap_top
-   || BITMAP_INDEX(ptr) != BITMAP_FREE) return;
+  if (ptr < heap || ptr >= heap_top) return;
+  while (BITMAP_INDEX(ptr) == BITMAP_EMPTY) --ptr;
+  if (BITMAP_INDEX(ptr) == BITMAP_ALLOC) return;
   BITMAP_INDEX(ptr) = BITMAP_ALLOC;
   for (uintptr_t i = 1; BITMAP_INDEX(ptr + i) == BITMAP_EMPTY; ++i)
     gc_collect_root(ptr[i]);
