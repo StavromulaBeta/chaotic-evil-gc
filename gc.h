@@ -35,11 +35,10 @@
 
 void __gc_init(void*);
 void* gc_malloc(size_t);
+void* gc_flatmalloc(size_t);
 char* gc_strdup(char*);
 char* gc_strndup(char*, size_t);
 
 void gc_collect();
-
-extern int gc_enabled;
 
 #endif

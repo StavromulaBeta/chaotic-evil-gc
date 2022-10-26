@@ -1,3 +1,0 @@
-- Vectorise some of the bitmap operations to improve performance
-- Pack the bitmap to save memory, since only 2 bits of the byte are actually used.
-- Somehow make valgrind shut up.
