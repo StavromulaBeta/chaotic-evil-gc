@@ -73,7 +73,7 @@ void __gc_init(void* start)
 	bitmap[1][0] = ALLOC;
 }
 
-__attribute__((malloc, hot, assume_aligned(sizeof(uint64_t)), alloc_size(1), returns_nonnull))
+__attribute__((hot, assume_aligned(sizeof(uint64_t)), alloc_size(1), returns_nonnull))
 void* gc_malloc(size_t sz)
 {
 	static ptrdiff_t interval = 1024l*1024l*10;
@@ -92,7 +92,7 @@ void* gc_malloc(size_t sz)
 	return buf;
 }
 
-__attribute__((malloc, hot, assume_aligned(sizeof(uint64_t)), alloc_size(1), returns_nonnull))
+__attribute__((hot, assume_aligned(sizeof(uint64_t)), alloc_size(1), returns_nonnull))
 void* gc_flatmalloc(size_t sz)
 {
 	static ptrdiff_t interval = 1024l*1024l*10;
@@ -141,7 +141,7 @@ static void gc_collect_root(uint64_t* restrict addr)
 			for (;bitmap[!z][index+sz] == EMPTY;sz++);
 			alloc[z] += sz;
 			//assert(bitmap[z][alloc[z]] == EMPTY);
-			bitmap[z][alloc[z]] = ALLOC;
+			bitmap[z][alloc[z]] = bitmap[!z][index];
 			for (size_t i = 0;i < sz;i++)
 			{
 				uint64_t from = space[!z][index+i];
